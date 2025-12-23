@@ -1,0 +1,24 @@
+{
+  "navigationFallback": {
+    "rewrite": "/loop-file-scanner.html"
+  },
+  "routes": [
+    {
+      "route": "/",
+      "rewrite": "/loop-file-scanner.html"
+    }
+  ],
+  "responseOverrides": {
+    "404": {
+      "rewrite": "/loop-file-scanner.html"
+    }
+  },
+  "globalHeaders": {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Content-Security-Policy": "frame-ancestors 'none'"
+  },
+  "mimeTypes": {
+    ".html": "text/html"
+  }
+}

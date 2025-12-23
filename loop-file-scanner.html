@@ -1,0 +1,1762 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Microsoft 365 File Scanner</title>
+    <script src="https://alcdn.msauth.net/browser/2.38.0/js/msal-browser.min.js"></script>
+    <style>
+        :root {
+            --primary: #0078d4;
+            --primary-dark: #106ebe;
+            --success: #107c10;
+            --warning: #ffb900;
+            --danger: #d13438;
+            --gray-100: #f3f2f1;
+            --gray-200: #edebe9;
+            --gray-300: #d2d0ce;
+            --gray-600: #605e5c;
+            --gray-800: #323130;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--gray-100);
+            color: var(--gray-800);
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        header h1 { font-size: 24px; font-weight: 600; }
+        header p { opacity: 0.9; margin-top: 4px; }
+
+        .auth-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .auth-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--danger);
+        }
+
+        .status-dot.connected { background: var(--success); }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary {
+            background: white;
+            color: var(--primary);
+        }
+
+        .btn-primary:hover { background: var(--gray-100); }
+
+        .btn-secondary {
+            background: var(--gray-200);
+            color: var(--gray-800);
+        }
+
+        .btn-secondary:hover { background: var(--gray-300); }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-success:hover { opacity: 0.9; }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-lg {
+            padding: 12px 24px;
+            font-size: 16px;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--gray-200);
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .card-body { padding: 20px; }
+
+        .tabs {
+            display: flex;
+            border-bottom: 2px solid var(--gray-200);
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 12px 20px;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+            font-weight: 500;
+            color: var(--gray-600);
+            transition: all 0.2s;
+        }
+
+        .tab:hover { color: var(--primary); }
+        .tab.active {
+            color: var(--primary);
+            border-bottom-color: var(--primary);
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid var(--gray-300);
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(0,120,212,0.1);
+        }
+
+        textarea.form-control {
+            min-height: 120px;
+            resize: vertical;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .checkbox-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .checkbox-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .checkbox-item input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .file-drop {
+            border: 2px dashed var(--gray-300);
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .file-drop:hover, .file-drop.dragover {
+            border-color: var(--primary);
+            background: rgba(0,120,212,0.05);
+        }
+
+        .file-drop input { display: none; }
+
+        .progress-container {
+            margin: 20px 0;
+        }
+
+        .progress-bar {
+            height: 8px;
+            background: var(--gray-200);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--primary);
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+
+        .progress-text {
+            font-size: 14px;
+            color: var(--gray-600);
+            margin-top: 8px;
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .results-table th, .results-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--gray-200);
+        }
+
+        .results-table th {
+            background: var(--gray-100);
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+
+        .results-table tr:hover { background: var(--gray-100); }
+
+        .results-table .file-name {
+            max-width: 250px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .badge-success { background: #dff6dd; color: var(--success); }
+        .badge-warning { background: #fff4ce; color: #8a6d00; }
+        .badge-info { background: #cce4f6; color: var(--primary); }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: var(--gray-100);
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--gray-600);
+            margin-top: 4px;
+        }
+
+        .log-output {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 16px;
+            border-radius: 4px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .log-output .log-entry { margin-bottom: 4px; }
+        .log-output .log-info { color: #4fc1ff; }
+        .log-output .log-success { color: #6a9955; }
+        .log-output .log-error { color: #f14c4c; }
+        .log-output .log-warn { color: #cca700; }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            display: none;
+        }
+
+        .modal-overlay.active { display: flex; }
+
+        .modal {
+            background: white;
+            border-radius: 8px;
+            max-width: 800px;
+            max-height: 90vh;
+            overflow: auto;
+            width: 90%;
+        }
+
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--gray-200);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-body { padding: 20px; }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: var(--gray-600);
+        }
+
+        .detail-grid {
+            display: grid;
+            grid-template-columns: 140px 1fr;
+            gap: 8px 16px;
+            font-size: 14px;
+        }
+
+        .detail-label {
+            font-weight: 600;
+            color: var(--gray-600);
+        }
+
+        .detail-value {
+            word-break: break-all;
+        }
+
+        .hidden { display: none !important; }
+
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .two-col { grid-template-columns: 1fr; }
+        }
+
+        .user-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .user-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background: var(--gray-200);
+            border-radius: 16px;
+            font-size: 13px;
+        }
+
+        .user-chip .remove {
+            cursor: pointer;
+            color: var(--gray-600);
+            font-weight: bold;
+        }
+
+        .user-chip .remove:hover { color: var(--danger); }
+
+        .table-container {
+            max-height: 500px;
+            overflow: auto;
+            border: 1px solid var(--gray-200);
+            border-radius: 4px;
+        }
+
+        .action-bar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--gray-600);
+        }
+
+        .empty-state svg {
+            width: 80px;
+            height: 80px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--gray-300);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Microsoft 365 File Scanner</h1>
+            <p>Search for files across OneDrive and SharePoint, analyze permissions, and generate reports</p>
+            <div class="auth-bar">
+                <div class="auth-status">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="authStatus">Not connected</span>
+                </div>
+                <button class="btn btn-primary" id="loginBtn" onclick="login()">Sign in with Microsoft</button>
+                <button class="btn btn-secondary hidden" id="logoutBtn" onclick="logout()">Sign out</button>
+                <button class="btn btn-secondary" id="showRedirectBtn" onclick="showRedirectUri()" style="font-size:12px;">Show Redirect URI</button>
+            </div>
+        </header>
+
+        <div class="card">
+            <div class="card-header">Configuration</div>
+            <div class="card-body">
+                    <div class="two-col">
+                        <div>
+                            <div class="form-group">
+                                <label>File Types to Search</label>
+                                <div class="checkbox-group">
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" id="typeLoop" checked> .loop files
+                                    </label>
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" id="typeFluid"> .fluid files
+                                    </label>
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" id="typeDocx"> .docx files
+                                    </label>
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" id="typeXlsx"> .xlsx files
+                                    </label>
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" id="typePptx"> .pptx files
+                                    </label>
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" id="typePdf"> .pdf files
+                                    </label>
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" id="typeAll"> All files
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Custom File Extension (optional)</label>
+                                <input type="text" class="form-control" id="customExt" placeholder="e.g., .json, .txt">
+                            </div>
+
+                            <div class="form-group">
+                                <label>Search Query (optional)</label>
+                                <input type="text" class="form-control" id="searchQuery" placeholder="e.g., project, report, meeting notes">
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="form-group">
+                                <label>Filter Options</label>
+                                <div class="checkbox-group" style="flex-direction: column;">
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" id="filterShared" checked> Only show files shared with target users
+                                    </label>
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" id="filterAllTargets"> Only show files shared with ALL target users
+                                    </label>
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" id="includeVersions" checked> Include version history
+                                    </label>
+                                    <label class="checkbox-item">
+                                        <input type="checkbox" id="includeActivities" checked> Include recent activities
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Date Range (optional)</label>
+                                <div style="display: flex; gap: 10px;">
+                                    <input type="date" class="form-control" id="dateFrom" style="flex:1">
+                                    <input type="date" class="form-control" id="dateTo" style="flex:1">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="height: 1px; background: var(--gray-200); margin: 24px 0;"></div>
+
+                    <div class="two-col">
+                        <div>
+                            <h3 style="margin-bottom: 16px;">Target Users (to find in permissions)</h3>
+                            <div class="form-group">
+                                <label>Add users manually</label>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <input type="text" class="form-control" id="targetUserInput"
+                                        placeholder="Enter email and press Enter or click Add" style="flex: 1;">
+                                    <button class="btn btn-secondary" type="button" onclick="addManualUser('target')">Add</button>
+                                </div>
+                            </div>
+                            <div class="user-chips" id="targetUserChips"></div>
+
+                            <div class="form-group" style="margin-top: 20px;">
+                                <label>Or upload a list (CSV or TXT)</label>
+                                <div class="file-drop" id="targetFileDrop">
+                                    <input type="file" id="targetFileInput" accept=".csv,.txt">
+                                    <p>Drop file here or click to upload</p>
+                                    <small style="color: var(--gray-600);">One email per line or CSV with email column</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 style="margin-bottom: 16px;">Users to Scan (whose files to search)</h3>
+                            <div class="form-group">
+                                <label>Add users manually</label>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <input type="text" class="form-control" id="scanUserInput"
+                                        placeholder="Enter email and press Enter or click Add" style="flex: 1;">
+                                    <button class="btn btn-secondary" type="button" onclick="addManualUser('scan')">Add</button>
+                                </div>
+                            </div>
+                            <div class="user-chips" id="scanUserChips"></div>
+
+                            <div class="form-group" style="margin-top: 20px;">
+                                <label>Or upload a list (CSV or TXT)</label>
+                                <div class="file-drop" id="scanFileDrop">
+                                    <input type="file" id="scanFileInput" accept=".csv,.txt">
+                                    <p>Drop file here or click to upload</p>
+                                    <small style="color: var(--gray-600);">One email per line or CSV with email column</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 20px;">
+                        <label>Quick Add - Paste emails (one per line or comma-separated)</label>
+                        <textarea class="form-control" id="bulkEmails" rows="4"
+                            placeholder="user1@company.com&#10;user2@company.com&#10;user3@company.com"></textarea>
+                        <div style="margin-top: 8px; display: flex; gap: 8px;">
+                            <button class="btn btn-secondary" onclick="addBulkEmails('target')">Add as Target Users</button>
+                            <button class="btn btn-secondary" onclick="addBulkEmails('scan')">Add as Users to Scan</button>
+                            <button class="btn btn-secondary" onclick="addBulkEmailsToBoth()">Add to Both Lists</button>
+                        </div>
+                    </div>
+
+                    <div style="height: 1px; background: var(--gray-200); margin: 24px 0;"></div>
+
+                    <div class="form-group">
+                        <label>Search Locations</label>
+                        <div class="checkbox-group" style="flex-direction: column;">
+                            <label class="checkbox-item">
+                                <input type="checkbox" id="searchOneDrive" checked> OneDrive (personal drives of users to scan)
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" id="searchSharePoint"> SharePoint Sites
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="form-group" id="sharepointSitesGroup" style="display: none;">
+                        <label>SharePoint Sites to Search</label>
+                        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                            <input type="text" class="form-control" id="siteUrlInput"
+                                placeholder="Enter SharePoint site URL (e.g., https://company.sharepoint.com/sites/TeamSite)">
+                            <button class="btn btn-secondary" onclick="addSharePointSite()">Add Site</button>
+                            <button class="btn btn-secondary" onclick="loadAllSites()">Load All Sites</button>
+                        </div>
+                        <div class="user-chips" id="siteChips"></div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>SharePoint Libraries (optional - leave empty to search all)</label>
+                        <input type="text" class="form-control" id="libraryFilter"
+                            placeholder="e.g., Documents, Shared Documents">
+                    </div>
+                </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Results</div>
+            <div class="card-body">
+                    <div class="stats-grid" id="statsGrid">
+                        <div class="stat-card">
+                            <div class="stat-value" id="statTotal">0</div>
+                            <div class="stat-label">Total Files Found</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="statMatched">0</div>
+                            <div class="stat-label">With Target Users</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="statAllTargets">0</div>
+                            <div class="stat-label">All Targets Matched</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value" id="statLocations">0</div>
+                            <div class="stat-label">Locations Scanned</div>
+                        </div>
+                    </div>
+
+                    <div class="action-bar" style="margin-bottom: 16px;">
+                        <button class="btn btn-success" onclick="exportCSV()">Export CSV</button>
+                        <button class="btn btn-secondary" onclick="exportJSON()">Export JSON</button>
+                        <button class="btn btn-secondary" onclick="exportMarkdown()">Export Markdown</button>
+                        <input type="text" class="form-control" id="filterResults"
+                            placeholder="Filter results..." style="width: 200px;">
+                    </div>
+
+                    <div id="resultsEmpty" class="empty-state">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <p>No results yet. Configure your search and click "Start Scan".</p>
+                    </div>
+
+                    <div class="table-container hidden" id="resultsTableContainer">
+                        <table class="results-table" id="resultsTable">
+                            <thead>
+                                <tr>
+                                    <th>File Name</th>
+                                    <th>Location</th>
+                                    <th>Owner</th>
+                                    <th>Size</th>
+                                    <th>Modified</th>
+                                    <th>Shared With</th>
+                                    <th>Target Match</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultsBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">Logs</div>
+            <div class="card-body">
+                    <div class="action-bar" style="margin-bottom: 16px;">
+                        <button class="btn btn-secondary" onclick="clearLogs()">Clear Logs</button>
+                        <button class="btn btn-secondary" onclick="copyLogs()">Copy to Clipboard</button>
+                    </div>
+                    <div class="log-output" id="logOutput">
+                        <div class="log-entry log-info">[System] Ready. Please sign in to begin.</div>
+                    </div>
+                </div>
+        </div>
+
+        <!-- Scan Button -->
+        <div style="text-align: center; margin: 20px 0;">
+            <button class="btn btn-success btn-lg" id="scanBtn" onclick="startScan()" disabled>
+                <span id="scanBtnText">Start Scan</span>
+                <div class="spinner hidden" id="scanSpinner"></div>
+            </button>
+            <button class="btn btn-danger btn-lg hidden" id="stopBtn" onclick="stopScan()">Stop Scan</button>
+        </div>
+
+        <!-- Progress -->
+        <div class="card hidden" id="progressCard">
+            <div class="card-body">
+                <div class="progress-container">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+                    </div>
+                    <div class="progress-text" id="progressText">Preparing scan...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Detail Modal -->
+    <div class="modal-overlay" id="fileModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3 id="modalTitle">File Details</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // CONFIGURATION
+        // ============================================
+        const msalConfig = {
+            auth: {
+                clientId: 'f494a4c5-6af1-4517-8805-e4c9a7161462', // SAP App Registration
+                authority: 'https://login.microsoftonline.com/42f7676c-f455-423c-82f6-dc2d99791af7', // SAP tenant
+                // Uses current page URL (without query/hash) as redirect - must be registered in Azure AD
+                // Example: http://localhost:3000/loop-file-scanner.html OR http://localhost:3000/loop-file-scanner/loop-file-scanner.html
+                redirectUri: window.location.href.split('?')[0].split('#')[0]
+            },
+            cache: {
+                cacheLocation: 'sessionStorage',
+                storeAuthStateInCookie: false
+            }
+        };
+
+        const graphScopes = [
+            'User.Read',
+            'Files.Read.All',
+            'Sites.Read.All'
+        ];
+
+        // ============================================
+        // STATE
+        // ============================================
+        let msalInstance = null;
+        let accessToken = null;
+        let isScanning = false;
+        let shouldStop = false;
+
+        const state = {
+            targetUsers: [],
+            scanUsers: [],
+            sharePointSites: [],
+            results: [],
+            scannedLocations: 0
+        };
+
+        // ============================================
+        // INITIALIZATION
+        // ============================================
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // Debug: Log current URL and configured redirect
+                console.log('=== MSAL DEBUG ===');
+                console.log('Current URL:', window.location.href);
+                console.log('Configured redirectUri:', msalConfig.auth.redirectUri);
+                console.log('URL hash:', window.location.hash);
+                console.log('URL search:', window.location.search);
+
+                log('info', `Current URL: ${window.location.href}`);
+                log('info', `Redirect URI: ${msalConfig.auth.redirectUri}`);
+
+                msalInstance = new msal.PublicClientApplication(msalConfig);
+
+                // MSAL 2.x requires async initialization
+                await msalInstance.initialize();
+                log('info', 'MSAL initialized successfully');
+
+                // Handle redirect response (if coming back from login)
+                log('info', 'Checking for redirect response...');
+                const redirectResponse = await msalInstance.handleRedirectPromise();
+                console.log('Redirect response:', redirectResponse);
+
+                if (redirectResponse) {
+                    log('success', 'Redirect login completed');
+                    console.log('Got redirect response:', redirectResponse);
+                    handleLoginSuccess(redirectResponse.account);
+                } else {
+                    log('info', 'No redirect response found');
+                    // Check for existing session
+                    const accounts = msalInstance.getAllAccounts();
+                    console.log('Existing accounts:', accounts);
+                    if (accounts.length > 0) {
+                        log('info', `Found existing session: ${accounts[0].username}`);
+                        handleLoginSuccess(accounts[0]);
+                    }
+                }
+
+                setupEventListeners();
+            } catch (error) {
+                log('error', `Initialization error: ${error.message}`);
+                console.error('MSAL init error:', error);
+            }
+        });
+
+        function setupEventListeners() {
+            // User input handlers
+            document.getElementById('targetUserInput').addEventListener('keypress', e => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addManualUser('target');
+                }
+            });
+
+            document.getElementById('scanUserInput').addEventListener('keypress', e => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addManualUser('scan');
+                }
+            });
+
+            // File drop handlers
+            setupFileDrop('targetFileDrop', 'targetFileInput', 'target');
+            setupFileDrop('scanFileDrop', 'scanFileInput', 'scan');
+
+            // SharePoint toggle
+            document.getElementById('searchSharePoint').addEventListener('change', e => {
+                document.getElementById('sharepointSitesGroup').style.display = e.target.checked ? 'block' : 'none';
+            });
+
+            // Results filter
+            document.getElementById('filterResults').addEventListener('input', filterResultsTable);
+
+            // All files checkbox
+            document.getElementById('typeAll').addEventListener('change', e => {
+                if (e.target.checked) {
+                    document.querySelectorAll('[id^="type"]:not(#typeAll)').forEach(cb => cb.checked = false);
+                }
+            });
+        }
+
+        function setupFileDrop(dropId, inputId, type) {
+            const drop = document.getElementById(dropId);
+            const input = document.getElementById(inputId);
+
+            drop.addEventListener('click', () => input.click());
+            drop.addEventListener('dragover', e => {
+                e.preventDefault();
+                drop.classList.add('dragover');
+            });
+            drop.addEventListener('dragleave', () => drop.classList.remove('dragover'));
+            drop.addEventListener('drop', e => {
+                e.preventDefault();
+                drop.classList.remove('dragover');
+                handleFileUpload(e.dataTransfer.files[0], type);
+            });
+            input.addEventListener('change', e => handleFileUpload(e.target.files[0], type));
+        }
+
+        // ============================================
+        // AUTHENTICATION
+        // ============================================
+        async function login() {
+            // Detect Mac Safari which has popup issues
+            const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+
+            log('info', `Browser: ${navigator.userAgent.substring(0, 50)}...`);
+            log('info', `Platform: Mac=${isMac}, Safari=${isSafari}`);
+
+            try {
+                // For Safari on Mac, use redirect flow (more reliable)
+                if (isSafari && isMac) {
+                    log('info', 'Using redirect flow for Safari on Mac...');
+                    await msalInstance.loginRedirect({
+                        scopes: graphScopes,
+                        prompt: 'select_account'
+                    });
+                    return; // Page will redirect
+                }
+
+                // For other browsers, try popup first
+                log('info', 'Using popup flow...');
+                const response = await msalInstance.loginPopup({
+                    scopes: graphScopes,
+                    prompt: 'select_account'
+                });
+                handleLoginSuccess(response.account);
+            } catch (error) {
+                console.error('Login error:', error);
+                log('error', `Login error: ${error.errorCode || error.name}: ${error.message}`);
+
+                // If popup was blocked or failed, try redirect flow
+                if (error.errorCode === 'popup_window_error' ||
+                    error.errorCode === 'empty_window_error' ||
+                    error.message.includes('popup') ||
+                    error.message.includes('blocked')) {
+                    log('warn', 'Popup blocked or failed. Trying redirect flow...');
+                    try {
+                        await msalInstance.loginRedirect({
+                            scopes: graphScopes,
+                            prompt: 'select_account'
+                        });
+                    } catch (redirectError) {
+                        log('error', `Redirect login also failed: ${redirectError.message}`);
+                    }
+                    return;
+                }
+
+                // Check if consent is needed
+                if (error.errorCode === 'consent_required' ||
+                    error.errorCode === 'interaction_required' ||
+                    error.message.includes('consent') ||
+                    error.message.includes('AADSTS65001')) {
+                    log('warn', 'Admin consent required. Requesting consent...');
+                    try {
+                        const response = await msalInstance.loginPopup({
+                            scopes: graphScopes,
+                            prompt: 'consent'
+                        });
+                        handleLoginSuccess(response.account);
+                    } catch (consentError) {
+                        log('error', `Consent failed: ${consentError.message}`);
+                        showConsentInstructions();
+                    }
+                }
+            }
+        }
+
+        function showRedirectUri() {
+            const redirectUri = msalConfig.auth.redirectUri;
+            const clientId = msalConfig.auth.clientId;
+            const msg = `REDIRECT URI TO REGISTER IN AZURE AD:
+
+${redirectUri}
+
+STEPS:
+1. Go to Azure Portal → Microsoft Entra ID → App registrations
+2. Find app: ${clientId}
+3. Click "Authentication"
+4. Under "Single-page application" (NOT "Web"), click "Add URI"
+5. Paste this exact URL: ${redirectUri}
+6. Click "Save"
+
+The redirect URI must be registered as a Single-page application (SPA) type, not Web type.`;
+
+            alert(msg);
+            navigator.clipboard.writeText(redirectUri).then(() => {
+                log('info', `Redirect URI copied to clipboard: ${redirectUri}`);
+            });
+        }
+
+        function showConsentInstructions() {
+            const tenantId = '42f7676c-f455-423c-82f6-dc2d99791af7';
+            const clientId = 'f494a4c5-6af1-4517-8805-e4c9a7161462';
+            const adminConsentUrl = `https://login.microsoftonline.com/${tenantId}/adminconsent?client_id=${clientId}`;
+
+            log('error', '=== ADMIN CONSENT REQUIRED ===');
+            log('info', 'An admin needs to grant consent for this app.');
+            log('info', `Admin consent URL: ${adminConsentUrl}`);
+
+            // Show alert with instructions
+            alert(`Admin consent is required for this application.\n\nPlease ask your IT admin to visit:\n${adminConsentUrl}\n\nOr grant consent in Azure Portal:\nAzure AD → App registrations → ${clientId} → API permissions → Grant admin consent`);
+        }
+
+        async function logout() {
+            await msalInstance.logoutPopup();
+            accessToken = null;
+            updateAuthUI(false);
+            log('info', 'Signed out successfully');
+        }
+
+        function handleLoginSuccess(account) {
+            log('success', `Signed in as ${account.username}`);
+            updateAuthUI(true, account.username);
+            acquireToken();
+        }
+
+        async function acquireToken() {
+            const accounts = msalInstance.getAllAccounts();
+            if (accounts.length === 0) return;
+
+            try {
+                const response = await msalInstance.acquireTokenSilent({
+                    scopes: graphScopes,
+                    account: accounts[0]
+                });
+                accessToken = response.accessToken;
+                document.getElementById('scanBtn').disabled = false;
+                log('success', 'Token acquired successfully');
+            } catch (error) {
+                // Silent token failed, try interactive
+                if (error.errorCode === 'consent_required' ||
+                    error.errorCode === 'interaction_required') {
+                    log('warn', 'Consent required, prompting...');
+                    try {
+                        const response = await msalInstance.acquireTokenPopup({
+                            scopes: graphScopes,
+                            prompt: 'consent'
+                        });
+                        accessToken = response.accessToken;
+                        document.getElementById('scanBtn').disabled = false;
+                        log('success', 'Token acquired with consent');
+                    } catch (popupError) {
+                        log('error', `Token acquisition failed: ${popupError.message}`);
+                        showConsentInstructions();
+                    }
+                } else {
+                    log('warn', 'Token refresh needed, please sign in again');
+                }
+            }
+        }
+
+        function updateAuthUI(isLoggedIn, username = '') {
+            document.getElementById('statusDot').classList.toggle('connected', isLoggedIn);
+            document.getElementById('authStatus').textContent = isLoggedIn ? `Connected: ${username}` : 'Not connected';
+            document.getElementById('loginBtn').classList.toggle('hidden', isLoggedIn);
+            document.getElementById('logoutBtn').classList.toggle('hidden', !isLoggedIn);
+            document.getElementById('scanBtn').disabled = !isLoggedIn;
+        }
+
+        // ============================================
+        // GRAPH API
+        // ============================================
+        async function graphRequest(url, retries = 3) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+
+                    if (response.status === 401) {
+                        await acquireToken();
+                        continue;
+                    }
+
+                    if (response.status === 429) {
+                        const retryAfter = response.headers.get('Retry-After') || 5;
+                        log('warn', `Rate limited, waiting ${retryAfter}s...`);
+                        await sleep(retryAfter * 1000);
+                        continue;
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    return await response.json();
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    await sleep(1000);
+                }
+            }
+        }
+
+        // ============================================
+        // SCANNING
+        // ============================================
+        async function startScan() {
+            if (state.scanUsers.length === 0 && !document.getElementById('searchSharePoint').checked) {
+                alert('Please add users to scan or enable SharePoint search');
+                return;
+            }
+
+            isScanning = true;
+            shouldStop = false;
+            state.results = [];
+            state.scannedLocations = 0;
+
+            updateScanUI(true);
+            log('info', 'Starting scan...');
+
+            try {
+                const fileTypes = getSelectedFileTypes();
+                const searchQuery = document.getElementById('searchQuery').value || fileTypes[0] || '*';
+
+                // Scan OneDrive
+                if (document.getElementById('searchOneDrive').checked) {
+                    for (const user of state.scanUsers) {
+                        if (shouldStop) break;
+                        await scanUserOneDrive(user, searchQuery, fileTypes);
+                    }
+                }
+
+                // Scan SharePoint
+                if (document.getElementById('searchSharePoint').checked) {
+                    for (const site of state.sharePointSites) {
+                        if (shouldStop) break;
+                        await scanSharePointSite(site, searchQuery, fileTypes);
+                    }
+                }
+
+                log('success', `Scan complete! Found ${state.results.length} files`);
+            } catch (error) {
+                log('error', `Scan failed: ${error.message}`);
+            }
+
+            updateScanUI(false);
+            displayResults();
+        }
+
+        function stopScan() {
+            shouldStop = true;
+            log('warn', 'Stopping scan...');
+        }
+
+        async function scanUserOneDrive(userEmail, searchQuery, fileTypes) {
+            updateProgress(`Scanning OneDrive: ${userEmail}...`);
+            log('info', `Scanning OneDrive for ${userEmail}`);
+
+            try {
+                // Get drive ID
+                const driveUrl = `https://graph.microsoft.com/v1.0/users/${userEmail}/drive`;
+                const drive = await graphRequest(driveUrl);
+
+                if (!drive?.id) {
+                    log('warn', `Could not access OneDrive for ${userEmail}`);
+                    return;
+                }
+
+                // Search for files
+                const searchUrl = `https://graph.microsoft.com/v1.0/drives/${drive.id}/root/search(q='${searchQuery}')?$top=200`;
+                const searchResults = await graphRequest(searchUrl);
+
+                if (searchResults?.value) {
+                    const files = searchResults.value.filter(f => matchesFileTypes(f.name, fileTypes));
+                    log('info', `Found ${files.length} matching files in ${userEmail}'s OneDrive`);
+
+                    for (const file of files) {
+                        if (shouldStop) break;
+                        await processFile(file, drive.id, userEmail, 'OneDrive');
+                    }
+                }
+
+                state.scannedLocations++;
+            } catch (error) {
+                log('error', `Error scanning ${userEmail}: ${error.message}`);
+            }
+        }
+
+        async function scanSharePointSite(siteUrl, searchQuery, fileTypes) {
+            updateProgress(`Scanning SharePoint: ${siteUrl}...`);
+            log('info', `Scanning SharePoint site: ${siteUrl}`);
+
+            try {
+                // Get site ID
+                const hostname = new URL(siteUrl).hostname;
+                const sitePath = new URL(siteUrl).pathname;
+                const siteInfoUrl = `https://graph.microsoft.com/v1.0/sites/${hostname}:${sitePath}`;
+                const site = await graphRequest(siteInfoUrl);
+
+                if (!site?.id) {
+                    log('warn', `Could not access SharePoint site: ${siteUrl}`);
+                    return;
+                }
+
+                // Get drives (document libraries)
+                const drivesUrl = `https://graph.microsoft.com/v1.0/sites/${site.id}/drives`;
+                const drives = await graphRequest(drivesUrl);
+
+                for (const drive of drives?.value || []) {
+                    if (shouldStop) break;
+
+                    const searchUrl = `https://graph.microsoft.com/v1.0/drives/${drive.id}/root/search(q='${searchQuery}')?$top=200`;
+                    const searchResults = await graphRequest(searchUrl);
+
+                    if (searchResults?.value) {
+                        const files = searchResults.value.filter(f => matchesFileTypes(f.name, fileTypes));
+                        log('info', `Found ${files.length} matching files in ${drive.name}`);
+
+                        for (const file of files) {
+                            if (shouldStop) break;
+                            await processFile(file, drive.id, siteUrl, `SharePoint: ${drive.name}`);
+                        }
+                    }
+                }
+
+                state.scannedLocations++;
+            } catch (error) {
+                log('error', `Error scanning ${siteUrl}: ${error.message}`);
+            }
+        }
+
+        async function processFile(file, driveId, owner, locationType) {
+            try {
+                // Get permissions
+                const permUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${file.id}/permissions`;
+                const permissions = await graphRequest(permUrl);
+
+                const sharedWith = extractSharedUsers(permissions?.value || []);
+                const targetMatches = sharedWith.filter(u =>
+                    state.targetUsers.some(t => t.toLowerCase() === u.email?.toLowerCase())
+                );
+
+                // Check filters
+                if (document.getElementById('filterShared').checked && targetMatches.length === 0) {
+                    return;
+                }
+                if (document.getElementById('filterAllTargets').checked && targetMatches.length < state.targetUsers.length) {
+                    return;
+                }
+
+                // Get additional info
+                let versions = [];
+                let activities = [];
+
+                if (document.getElementById('includeVersions').checked) {
+                    try {
+                        const versionsUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${file.id}/versions?$top=20`;
+                        const versionsData = await graphRequest(versionsUrl);
+                        versions = versionsData?.value || [];
+                    } catch (e) {}
+                }
+
+                if (document.getElementById('includeActivities').checked) {
+                    try {
+                        const activitiesUrl = `https://graph.microsoft.com/v1.0/drives/${driveId}/items/${file.id}/activities`;
+                        const activitiesData = await graphRequest(activitiesUrl);
+                        activities = activitiesData?.value || [];
+                    } catch (e) {}
+                }
+
+                state.results.push({
+                    id: file.id,
+                    name: file.name,
+                    webUrl: file.webUrl,
+                    driveId: driveId,
+                    owner: owner,
+                    locationType: locationType,
+                    folder: file.parentReference?.path?.replace(/^.*:/, '') || '/',
+                    size: file.size,
+                    createdDateTime: file.createdDateTime,
+                    createdBy: file.createdBy?.user?.displayName || 'Unknown',
+                    createdByEmail: file.createdBy?.user?.email || '',
+                    lastModifiedDateTime: file.lastModifiedDateTime,
+                    lastModifiedBy: file.lastModifiedBy?.user?.displayName || 'Unknown',
+                    lastModifiedByEmail: file.lastModifiedBy?.user?.email || '',
+                    sharedWith: sharedWith,
+                    targetMatches: targetMatches,
+                    versions: versions.map(v => ({
+                        id: v.id,
+                        modified: v.lastModifiedDateTime,
+                        modifiedBy: v.lastModifiedBy?.user?.displayName || 'Unknown'
+                    })),
+                    activities: activities.slice(0, 10).map(a => ({
+                        action: Object.keys(a.action || {})[0] || 'unknown',
+                        actor: a.actor?.user?.displayName || 'Unknown',
+                        time: a.times?.recordedDateTime
+                    }))
+                });
+
+                updateProgress(`Found ${state.results.length} files...`);
+            } catch (error) {
+                log('warn', `Error processing file ${file.name}: ${error.message}`);
+            }
+        }
+
+        function extractSharedUsers(permissions) {
+            const users = [];
+            const seen = new Set();
+
+            for (const perm of permissions) {
+                const identities = [
+                    ...(perm.grantedToIdentitiesV2 || []),
+                    ...(perm.grantedToIdentities || [])
+                ];
+
+                for (const identity of identities) {
+                    if (identity.user?.email && !seen.has(identity.user.email.toLowerCase())) {
+                        seen.add(identity.user.email.toLowerCase());
+                        users.push({
+                            email: identity.user.email,
+                            name: identity.user.displayName,
+                            role: perm.roles?.join(', ') || 'unknown'
+                        });
+                    }
+                }
+
+                if (perm.grantedToV2?.user?.email && !seen.has(perm.grantedToV2.user.email.toLowerCase())) {
+                    seen.add(perm.grantedToV2.user.email.toLowerCase());
+                    users.push({
+                        email: perm.grantedToV2.user.email,
+                        name: perm.grantedToV2.user.displayName,
+                        role: perm.roles?.join(', ') || 'unknown'
+                    });
+                }
+            }
+
+            return users;
+        }
+
+        // ============================================
+        // UI HELPERS
+        // ============================================
+        function addUser(type, email) {
+            email = email.trim().toLowerCase();
+            if (!email || !email.includes('@')) return;
+
+            const list = type === 'target' ? state.targetUsers : state.scanUsers;
+            if (list.includes(email)) return;
+
+            list.push(email);
+            renderUserChips(type);
+
+            document.getElementById(type === 'target' ? 'targetUserInput' : 'scanUserInput').value = '';
+            log('info', `Added ${type} user: ${email}`);
+        }
+
+        function addManualUser(type) {
+            const inputId = type === 'target' ? 'targetUserInput' : 'scanUserInput';
+            const input = document.getElementById(inputId);
+            addUser(type, input.value);
+        }
+
+        function removeUser(type, email) {
+            const list = type === 'target' ? state.targetUsers : state.scanUsers;
+            const index = list.indexOf(email);
+            if (index > -1) {
+                list.splice(index, 1);
+                renderUserChips(type);
+            }
+        }
+
+        function renderUserChips(type) {
+            const list = type === 'target' ? state.targetUsers : state.scanUsers;
+            const container = document.getElementById(type === 'target' ? 'targetUserChips' : 'scanUserChips');
+
+            container.innerHTML = list.map(email => `
+                <span class="user-chip">
+                    ${email}
+                    <span class="remove" onclick="removeUser('${type}', '${email}')">&times;</span>
+                </span>
+            `).join('');
+        }
+
+        function getBulkEmails() {
+            const text = document.getElementById('bulkEmails').value;
+            return text.split(/[\n,;]+/).map(e => e.trim()).filter(e => e.includes('@'));
+        }
+
+        function addBulkEmails(type) {
+            const emails = getBulkEmails();
+            emails.forEach(email => addUser(type, email));
+            document.getElementById('bulkEmails').value = '';
+        }
+
+        function addBulkEmailsToBoth() {
+            const emails = getBulkEmails();
+            emails.forEach(email => {
+                addUser('target', email);
+                addUser('scan', email);
+            });
+            document.getElementById('bulkEmails').value = '';
+        }
+
+        function handleFileUpload(file, type) {
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = e => {
+                const text = e.target.result;
+                const lines = text.split(/[\r\n]+/);
+
+                for (const line of lines) {
+                    const parts = line.split(',');
+                    const email = parts.find(p => p.includes('@') && p.includes('.'));
+                    if (email) addUser(type, email.replace(/['"]/g, '').trim());
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        function addSharePointSite() {
+            const url = document.getElementById('siteUrlInput').value.trim();
+            if (!url || state.sharePointSites.includes(url)) return;
+
+            state.sharePointSites.push(url);
+            renderSiteChips();
+            document.getElementById('siteUrlInput').value = '';
+        }
+
+        function removeSite(url) {
+            const index = state.sharePointSites.indexOf(url);
+            if (index > -1) {
+                state.sharePointSites.splice(index, 1);
+                renderSiteChips();
+            }
+        }
+
+        function renderSiteChips() {
+            document.getElementById('siteChips').innerHTML = state.sharePointSites.map(url => `
+                <span class="user-chip">
+                    ${new URL(url).pathname}
+                    <span class="remove" onclick="removeSite('${url}')">&times;</span>
+                </span>
+            `).join('');
+        }
+
+        async function loadAllSites() {
+            log('info', 'Loading SharePoint sites...');
+            try {
+                const sitesUrl = 'https://graph.microsoft.com/v1.0/sites?search=*&$top=100';
+                const sites = await graphRequest(sitesUrl);
+
+                for (const site of sites?.value || []) {
+                    if (site.webUrl && !state.sharePointSites.includes(site.webUrl)) {
+                        state.sharePointSites.push(site.webUrl);
+                    }
+                }
+
+                renderSiteChips();
+                log('success', `Loaded ${state.sharePointSites.length} SharePoint sites`);
+            } catch (error) {
+                log('error', `Failed to load sites: ${error.message}`);
+            }
+        }
+
+        function getSelectedFileTypes() {
+            const types = [];
+            if (document.getElementById('typeAll').checked) return ['*'];
+            if (document.getElementById('typeLoop').checked) types.push('.loop');
+            if (document.getElementById('typeFluid').checked) types.push('.fluid');
+            if (document.getElementById('typeDocx').checked) types.push('.docx');
+            if (document.getElementById('typeXlsx').checked) types.push('.xlsx');
+            if (document.getElementById('typePptx').checked) types.push('.pptx');
+            if (document.getElementById('typePdf').checked) types.push('.pdf');
+
+            const custom = document.getElementById('customExt').value.trim();
+            if (custom) {
+                custom.split(',').forEach(ext => {
+                    ext = ext.trim();
+                    if (!ext.startsWith('.')) ext = '.' + ext;
+                    types.push(ext);
+                });
+            }
+
+            return types.length ? types : ['*'];
+        }
+
+        function matchesFileTypes(filename, types) {
+            if (types.includes('*')) return true;
+            return types.some(ext => filename?.toLowerCase().endsWith(ext.toLowerCase()));
+        }
+
+        function updateScanUI(scanning) {
+            document.getElementById('scanBtn').classList.toggle('hidden', scanning);
+            document.getElementById('stopBtn').classList.toggle('hidden', !scanning);
+            document.getElementById('progressCard').classList.toggle('hidden', !scanning);
+            document.getElementById('scanSpinner').classList.toggle('hidden', !scanning);
+        }
+
+        function updateProgress(text, percent = null) {
+            document.getElementById('progressText').textContent = text;
+            if (percent !== null) {
+                document.getElementById('progressFill').style.width = percent + '%';
+            }
+        }
+
+        function displayResults() {
+            document.getElementById('statTotal').textContent = state.results.length;
+            document.getElementById('statMatched').textContent = state.results.filter(r => r.targetMatches.length > 0).length;
+            document.getElementById('statAllTargets').textContent = state.results.filter(r => r.targetMatches.length >= state.targetUsers.length).length;
+            document.getElementById('statLocations').textContent = state.scannedLocations;
+
+            if (state.results.length === 0) {
+                document.getElementById('resultsEmpty').classList.remove('hidden');
+                document.getElementById('resultsTableContainer').classList.add('hidden');
+                return;
+            }
+
+            document.getElementById('resultsEmpty').classList.add('hidden');
+            document.getElementById('resultsTableContainer').classList.remove('hidden');
+
+            const tbody = document.getElementById('resultsBody');
+            tbody.innerHTML = state.results.map((file, idx) => `
+                <tr>
+                    <td class="file-name" title="${file.name}">${file.name}</td>
+                    <td>${file.locationType}</td>
+                    <td>${file.owner}</td>
+                    <td>${formatSize(file.size)}</td>
+                    <td>${formatDate(file.lastModifiedDateTime)}</td>
+                    <td>${file.sharedWith.length} users</td>
+                    <td>
+                        <span class="badge ${file.targetMatches.length >= state.targetUsers.length ? 'badge-success' : file.targetMatches.length > 0 ? 'badge-warning' : 'badge-info'}">
+                            ${file.targetMatches.length}/${state.targetUsers.length}
+                        </span>
+                    </td>
+                    <td>
+                        <button class="btn btn-secondary" onclick="showFileDetails(${idx})">Details</button>
+                    </td>
+                </tr>
+            `).join('');
+
+        }
+
+        function filterResultsTable() {
+            const filter = document.getElementById('filterResults').value.toLowerCase();
+            document.querySelectorAll('#resultsBody tr').forEach(row => {
+                row.style.display = row.textContent.toLowerCase().includes(filter) ? '' : 'none';
+            });
+        }
+
+        function showFileDetails(idx) {
+            const file = state.results[idx];
+            document.getElementById('modalTitle').textContent = file.name;
+
+            document.getElementById('modalBody').innerHTML = `
+                <div class="detail-grid">
+                    <span class="detail-label">File ID</span>
+                    <span class="detail-value">${file.id}</span>
+
+                    <span class="detail-label">Location</span>
+                    <span class="detail-value">${file.locationType} - ${file.owner}</span>
+
+                    <span class="detail-label">Folder</span>
+                    <span class="detail-value">${file.folder}</span>
+
+                    <span class="detail-label">Size</span>
+                    <span class="detail-value">${formatSize(file.size)} (${file.size} bytes)</span>
+
+                    <span class="detail-label">Created</span>
+                    <span class="detail-value">${file.createdDateTime} by ${file.createdBy} (${file.createdByEmail})</span>
+
+                    <span class="detail-label">Modified</span>
+                    <span class="detail-value">${file.lastModifiedDateTime} by ${file.lastModifiedBy} (${file.lastModifiedByEmail})</span>
+
+                    <span class="detail-label">Web URL</span>
+                    <span class="detail-value"><a href="${file.webUrl}" target="_blank">${file.webUrl}</a></span>
+
+                    <span class="detail-label">Versions</span>
+                    <span class="detail-value">${file.versions.length} versions</span>
+
+                    <span class="detail-label">Target Match</span>
+                    <span class="detail-value">${file.targetMatches.length}/${state.targetUsers.length} (${file.targetMatches.map(t => t.email).join(', ') || 'None'})</span>
+                </div>
+
+                <h4 style="margin: 20px 0 10px;">Shared With (${file.sharedWith.length} users)</h4>
+                <table class="results-table">
+                    <thead>
+                        <tr><th>Name</th><th>Email</th><th>Role</th></tr>
+                    </thead>
+                    <tbody>
+                        ${file.sharedWith.map(u => `<tr><td>${u.name}</td><td>${u.email}</td><td>${u.role}</td></tr>`).join('')}
+                    </tbody>
+                </table>
+
+                ${file.versions.length > 0 ? `
+                    <h4 style="margin: 20px 0 10px;">Version History</h4>
+                    <table class="results-table">
+                        <thead>
+                            <tr><th>Version</th><th>Modified</th><th>By</th></tr>
+                        </thead>
+                        <tbody>
+                            ${file.versions.map(v => `<tr><td>${v.id}</td><td>${v.modified}</td><td>${v.modifiedBy}</td></tr>`).join('')}
+                        </tbody>
+                    </table>
+                ` : ''}
+
+                ${file.activities.length > 0 ? `
+                    <h4 style="margin: 20px 0 10px;">Recent Activities</h4>
+                    <table class="results-table">
+                        <thead>
+                            <tr><th>Action</th><th>Actor</th><th>Time</th></tr>
+                        </thead>
+                        <tbody>
+                            ${file.activities.map(a => `<tr><td>${a.action}</td><td>${a.actor}</td><td>${a.time}</td></tr>`).join('')}
+                        </tbody>
+                    </table>
+                ` : ''}
+            `;
+
+            document.getElementById('fileModal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('fileModal').classList.remove('active');
+        }
+
+        // ============================================
+        // EXPORT FUNCTIONS
+        // ============================================
+        function exportCSV() {
+            const headers = [
+                'File ID', 'File Name', 'Location Type', 'Owner', 'Folder', 'Size (Bytes)', 'Size (KB)',
+                'Created Date', 'Created By', 'Created By Email',
+                'Modified Date', 'Modified By', 'Modified By Email',
+                'Shared With Count', 'Shared Users (Names)', 'Shared Users (Emails)', 'Permissions Detail',
+                'Target Match Count', 'Target Match %', 'Target Matches',
+                'Version Count', 'Version History',
+                'Recent Activities', 'Web URL'
+            ];
+
+            const rows = state.results.map(f => [
+                f.id,
+                `"${f.name.replace(/"/g, '""')}"`,
+                f.locationType,
+                `"${f.owner}"`,
+                `"${f.folder}"`,
+                f.size,
+                (f.size / 1024).toFixed(2),
+                f.createdDateTime,
+                `"${f.createdBy}"`,
+                f.createdByEmail,
+                f.lastModifiedDateTime,
+                `"${f.lastModifiedBy}"`,
+                f.lastModifiedByEmail,
+                f.sharedWith.length,
+                `"${f.sharedWith.map(u => u.name).join('; ')}"`,
+                `"${f.sharedWith.map(u => u.email).join('; ')}"`,
+                `"${f.sharedWith.map(u => `${u.name} <${u.email}> [${u.role}]`).join('; ')}"`,
+                f.targetMatches.length,
+                `${Math.round(f.targetMatches.length / state.targetUsers.length * 100)}%`,
+                `"${f.targetMatches.map(t => t.email).join('; ')}"`,
+                f.versions.length,
+                `"${f.versions.map(v => `v${v.id} (${v.modified} by ${v.modifiedBy})`).join('; ')}"`,
+                `"${f.activities.map(a => `${a.action} by ${a.actor} at ${a.time}`).join('; ')}"`,
+                f.webUrl
+            ]);
+
+            const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            downloadFile(csv, 'file-scan-report.csv', 'text/csv');
+        }
+
+        function exportJSON() {
+            const json = JSON.stringify({
+                scanDate: new Date().toISOString(),
+                targetUsers: state.targetUsers,
+                stats: {
+                    totalFiles: state.results.length,
+                    matchedFiles: state.results.filter(r => r.targetMatches.length > 0).length,
+                    allTargetsMatched: state.results.filter(r => r.targetMatches.length >= state.targetUsers.length).length
+                },
+                files: state.results
+            }, null, 2);
+            downloadFile(json, 'file-scan-report.json', 'application/json');
+        }
+
+        function exportMarkdown() {
+            let md = `# File Scan Report\n\n`;
+            md += `Generated: ${new Date().toISOString()}\n\n`;
+            md += `## Summary\n\n`;
+            md += `| Metric | Value |\n|--------|-------|\n`;
+            md += `| Total Files | ${state.results.length} |\n`;
+            md += `| With Target Users | ${state.results.filter(r => r.targetMatches.length > 0).length} |\n`;
+            md += `| All Targets Matched | ${state.results.filter(r => r.targetMatches.length >= state.targetUsers.length).length} |\n\n`;
+
+            md += `## Target Users\n\n`;
+            state.targetUsers.forEach(u => md += `- ${u}\n`);
+            md += `\n`;
+
+            md += `## Files Found\n\n`;
+            state.results.forEach(f => {
+                md += `### ${f.name}\n\n`;
+                md += `| Property | Value |\n|----------|-------|\n`;
+                md += `| Location | ${f.locationType} - ${f.owner} |\n`;
+                md += `| Folder | ${f.folder} |\n`;
+                md += `| Size | ${formatSize(f.size)} |\n`;
+                md += `| Created | ${f.createdDateTime} by ${f.createdBy} |\n`;
+                md += `| Modified | ${f.lastModifiedDateTime} by ${f.lastModifiedBy} |\n`;
+                md += `| Shared With | ${f.sharedWith.length} users |\n`;
+                md += `| Target Match | ${f.targetMatches.length}/${state.targetUsers.length} |\n`;
+                md += `| URL | [Open](${f.webUrl}) |\n\n`;
+            });
+
+            downloadFile(md, 'file-scan-report.md', 'text/markdown');
+        }
+
+        function downloadFile(content, filename, type) {
+            const blob = new Blob([content], { type });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // ============================================
+        // LOGGING
+        // ============================================
+        function log(level, message) {
+            const output = document.getElementById('logOutput');
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${level}`;
+            entry.textContent = `[${time}] ${message}`;
+            output.appendChild(entry);
+            output.scrollTop = output.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('logOutput').innerHTML = '';
+        }
+
+        function copyLogs() {
+            const text = document.getElementById('logOutput').innerText;
+            navigator.clipboard.writeText(text);
+            alert('Logs copied to clipboard');
+        }
+
+        // ============================================
+        // UTILITIES
+        // ============================================
+        function formatSize(bytes) {
+            if (!bytes) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '';
+            return new Date(dateStr).toLocaleDateString();
+        }
+
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+    </script>
+</body>
+</html>
