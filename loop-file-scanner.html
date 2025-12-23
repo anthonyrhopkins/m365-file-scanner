@@ -901,41 +901,43 @@
         // AUTHENTICATION
         // ============================================
         async function login() {
-            // Detect Mac Safari which has popup issues
-            const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+            // GitHub Pages has COOP headers that block popup communication
+            // Always use redirect flow for hosted sites, popup only for localhost
+            const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            const isGitHubPages = window.location.hostname.includes('github.io');
 
-            log('info', `Browser: ${navigator.userAgent.substring(0, 50)}...`);
-            log('info', `Platform: Mac=${isMac}, Safari=${isSafari}`);
+            log('info', `Host: ${window.location.hostname}`);
+            log('info', `Using ${isLocalhost ? 'popup' : 'redirect'} flow`);
 
             try {
-                // For Safari on Mac, use redirect flow (more reliable)
-                if (isSafari && isMac) {
-                    log('info', 'Using redirect flow for Safari on Mac...');
+                if (isLocalhost) {
+                    // Localhost: popup works fine
+                    log('info', 'Using popup flow for localhost...');
+                    const response = await msalInstance.loginPopup({
+                        scopes: graphScopes,
+                        prompt: 'select_account'
+                    });
+                    handleLoginSuccess(response.account);
+                } else {
+                    // GitHub Pages / hosted: must use redirect flow
+                    log('info', 'Using redirect flow for hosted site...');
                     await msalInstance.loginRedirect({
                         scopes: graphScopes,
                         prompt: 'select_account'
                     });
-                    return; // Page will redirect
+                    // Page will redirect, no further code runs
                 }
-
-                // For other browsers, try popup first
-                log('info', 'Using popup flow...');
-                const response = await msalInstance.loginPopup({
-                    scopes: graphScopes,
-                    prompt: 'select_account'
-                });
-                handleLoginSuccess(response.account);
             } catch (error) {
                 console.error('Login error:', error);
                 log('error', `Login error: ${error.errorCode || error.name}: ${error.message}`);
 
-                // If popup was blocked or failed, try redirect flow
+                // Fallback to redirect if popup fails
                 if (error.errorCode === 'popup_window_error' ||
                     error.errorCode === 'empty_window_error' ||
                     error.message.includes('popup') ||
-                    error.message.includes('blocked')) {
-                    log('warn', 'Popup blocked or failed. Trying redirect flow...');
+                    error.message.includes('blocked') ||
+                    error.message.includes('interaction_in_progress')) {
+                    log('warn', 'Popup failed. Switching to redirect flow...');
                     try {
                         await msalInstance.loginRedirect({
                             scopes: graphScopes,
@@ -954,11 +956,10 @@
                     error.message.includes('AADSTS65001')) {
                     log('warn', 'Admin consent required. Requesting consent...');
                     try {
-                        const response = await msalInstance.loginPopup({
+                        await msalInstance.loginRedirect({
                             scopes: graphScopes,
                             prompt: 'consent'
                         });
-                        handleLoginSuccess(response.account);
                     } catch (consentError) {
                         log('error', `Consent failed: ${consentError.message}`);
                         showConsentInstructions();
